@@ -20,6 +20,10 @@ rm(list = ls())
 
 library(tidyverse)
 library(kableExtra)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(stringr)
 
 ```
 
@@ -107,6 +111,75 @@ ggplot(data = Map_table,
 From the above plot of proportions of votes won for each map, we can see that `raid` and `nuketown '84` are the maps that are most likely to win the map vote when they are an option, each with a probability greater than 80%.
 
 ## Task 2 (Data Cleaning and Data Visualization – Complete using Generative AI)
+
+For this section of the report, we chose to use Microsoft Copilot. We gave copilot the same information that was given to us in the project information sheet, which we included in the first promt. We told the AI the names of the datasets and their variables, the relevant information at the start of task 1, and the research question from task 1. After this, we gave the AI some of the notes provided in task 1, such as "To do this, you will have to calculate the number times that each map was listed as a candidate (Map1 or Map2) and earned more votes than the other candidate. ...You should also include a visualization of the results." This section of the notes clearly lays out a few steps that it would have to follow to thoroughly answer the research question and male sure that it followed the same baseline that we did in task 1. After this, we told the AI: "Use R and generate code to answer the research question. Feel free to clean the code in a way that makes the most sense. Assume the data has already been read in as named above". This way, Microsoft Copilot would complete this task in a readble format that I could apply to R. It also made sure that the code it generated was usable with the data we had already read in, as I informed the AI of the names we gave the data when we read it in in task 1.
+
+The AI generated a 6 step solution including code that is implemented below. The steps were: 
+1. Combine and clean the datasets
+2. Determine whether Map1 or Map2 won the vote
+3. Reshape data so each row corresponds to a map being an option
+4. Compute wins and appearances
+5. Print the summary table
+6. Visualization
+
+```{r}
+# Combine Player 1 and Player 2 data
+games_ai <- bind_rows(GamesPlayer1, GamesPlayer2)
+
+# Remove games where the player joined after the vote (Map1 and Map2 both missing)
+games_clean <- games_ai %>%
+  filter(!(is.na(Map1) & is.na(Map2)))
+
+games_clean <- games_clean %>%
+  mutate(
+    # Identify vote outcomes
+    map1_votes = ifelse(MapVote == "Map1", 1, 0),
+    map2_votes = ifelse(MapVote == "Map2", 1, 0),
+
+    # Determine winner (Choice already gives this, but we need tie logic)
+    winner = Choice
+  )
+
+map_options <- games_clean %>%
+  select(Map1, Map2, winner) %>%
+  pivot_longer(cols = c(Map1, Map2),
+               names_to = "Position",
+               values_to = "Map") %>%
+  filter(!is.na(Map))
+
+map_summary <- map_options %>%
+  group_by(Map) %>%
+  summarise(
+    appearances = n(),
+    wins = sum(Map == winner),
+    win_rate = wins / appearances
+  ) %>%
+  arrange(desc(win_rate))
+
+print(map_summary)
+
+```
+
+```{r}
+ggplot(map_summary, aes(x = reorder(Map, win_rate), y = win_rate)) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Probability a Map Wins When It Is an Option",
+    x = "Map",
+    y = "Win Rate"
+  ) +
+  scale_y_continuous(labels = scales::percent_format())
+```
+
+
+  Our solution from Task 1 and the generative AI solution are similar, as they both aim to estimate, for each map, the probability that it wins when it is an option, and both do so by counting appearances as a candidate and wins as the chosen map. Structurally, they both combine Player 1 and Player 2 data, work at the match level, aggregate to the map level, and present a table and a bar plot of win proportions. Our use of candidate_count, vote_win, and vote_win_proportion are similar to Microsoft Copilots appearances, wins, and win_rate, and both outputs rank maps in a way that highlights consistently popular ones like Nuketown ’84, Raid, Crossroads Strike, and Standoff.
+
+  The most important difference is how ties are handled. In Our solution, we explicitly filter out all matches where Map1Vote == Map2Vote, which removes tied votes from both the wins and candidate appearances. This means that when a map wins because it is listed as Map1 in a tie, that win is not counted at all. Microsoft COpilots solution, by contrast, keeps those matches and assigns the win to Map1 whenever Map1Vote == Map2Vote, which is more in line with the problem statement: “In the event of a tie vote, the map listed in Map1 is chosen.” As a result, the generative AI table shows higher appearance and win counts for maps that frequently appear as Map1, and slightly lower win rates in some cases because the denominator, candidate appearances, is larger. From the standpoint of faithfully representing how the game actually chooses a map, the tie-inclusive approach is more correct, because a tie is not a “missing outcome” but a real win for Map1.
+  
+  A second key difference lies in robustness and data handling. Our approach standardizes map names to lowercase and remove extra spaces, and we join to the Maps reference table so that your final output is aligned with the official map list. However, our logic for counting candidates and wins is more fragmented, as we compute Option1, Option2, and OptionWin separately and then stitch them together with full_joins on different keys. This works, but it’s relatively brittle. If there were more complex patterns like missing values or additional map fields, the joins could become harder to reason about. The generative AI solution uses a pivot-longer style that treats each map-option row uniformly, which tends to be easier to extend and less error-prone when the data structure evolves.
+
+  Another meaningful difference between the two solutions lies in how clearly each analysis communicates its logic and how easily another analyst could reproduce or audit the results. Our solution is highly transparent in the sense that each step—splitting votes, filtering ties, counting Map1 and Map2 appearances separately, and joining the results—is explicitly laid out. This makes it easy for a reader to follow our reasoning and understand exactly how each intermediate object contributes to the final table. However, because ties are removed early in the workflow, the meaning of the final win proportions subtly shifts, but this shift is not immediately obvious from the table alone. A reader unfamiliar with our filtering choice might assume the proportions reflect all matches, including ties, which could lead to misinterpretation. The generative AI solution, by contrast, uses a more compact and expressive data‑reshaping strategy that makes the analytical logic easier to verify at a glance. This alignment between data structure and research question enhances reproducibility because the transformation steps correspond cleanly to the conceptual steps.
 
 
 ## Task 3 (Inference)
