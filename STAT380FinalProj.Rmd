@@ -1,0 +1,124 @@
+---
+title: "STAT 380 Final Project"
+author: 
+ - name: Isaac Swope
+ - name: Andrew Loiselle
+date: "2026-04-23"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, warning = FALSE)
+
+```
+
+## Front Matter
+```{r, message = FALSE}
+rm(list = ls())
+
+# Libraries
+
+library(tidyverse)
+library(kableExtra)
+
+```
+
+
+## Task 1 (Data Cleaning and Data Visualization – Complete without Generative AI)
+
+Research Question: Which maps are the most likely to win the map vote when they are an option?
+
+```{r}
+# Reading in Data
+
+GamesPlayer1 <- read.csv("https://raw.githubusercontent.com/Swopei/STAT380FinalProj_repo/refs/heads/main/Data/CODGames_p1_380.csv")
+GamesPlayer2 <- read.csv("https://raw.githubusercontent.com/Swopei/STAT380FinalProj_repo/refs/heads/main/Data/CODGames_p2_380.csv")
+Modes <- read.csv("https://raw.githubusercontent.com/Swopei/STAT380FinalProj_repo/refs/heads/main/Data/CODGameModes.csv")
+Maps <- read.csv("https://raw.githubusercontent.com/Swopei/STAT380FinalProj_repo/refs/heads/main/Data/CODMaps.csv")
+
+```
+
+First it is necessary to bind each of the two player's data sets into one data frame we will call `Games`. From `Games`, the column `MapVote` is separated into `Map1Vote` and `Map2Vote`. Now ties can be filtered out where the two map options have an equal number of votes. The map names are set to all lowercase and extra spaces are removed in both our new data frame called `Games_votes` and the map reference data frame called `Maps`. This way instances with misspelled names will removed, but instances with differing capitalization and spacing will be preserved by eventually joining these two data frames. The frequencies of a map appearing as either `Map1` or `Map2` are added together to get the total ammount of times a map has appeared as a candidate. The total vote wins for each map are then joined to the table, and the win frequency is calculated by dividing the win count for each my by its candidate count. Below we can see the table showing the number of times a map has appear as a candidate, the number of times it won the vote, and the proportion of votes it won.
+
+```{r}
+# Data Wrangling / Cleaning for Task 1
+
+GamesPlayer1$Player = "Player1"
+GamesPlayer2$Player = "Player2"
+Games <- bind_rows(GamesPlayer1, GamesPlayer2)
+
+Games_votes <- Games %>%
+  separate(MapVote,
+           into = c("Map1Vote", "Map2Vote"),
+           sep = " to ") %>%
+  filter(Map1Vote != Map2Vote) %>%
+  mutate(across(c(Map1, Map2, Choice), ~str_to_lower(str_squish(.))))
+
+Maps$Name <- str_to_lower(Maps$Name)
+
+Option1 <- Games_votes %>%
+  group_by(Map1) %>%
+  summarise(
+    frequency1 = n()
+  )
+
+Option2 <- Games_votes %>%
+  group_by(Map2) %>%
+  summarise(
+    frequency2 = n()
+  )
+
+OptionWin <-Games_votes %>%
+  group_by(Choice) %>%
+  summarise(
+    vote_win = n()
+  )
+
+Map_table <- Option1 %>%
+  full_join(Option2, by = c("Map1" = "Map2")) %>%
+  full_join(OptionWin, by = c("Map1" = "Choice")) %>%
+  mutate(across(everything(), ~replace_na(., 0)),
+    candidate_count = frequency1 + frequency2,
+    map = Map1,
+    vote_win_proportion = round(vote_win/candidate_count, 4)
+    ) %>%
+  right_join(Maps, by = c("map" = "Name")) %>%
+  select(map, candidate_count, vote_win, vote_win_proportion)
+
+# Creating Task 1 table
+
+kable(Map_table)
+
+```
+
+```{r}
+# Creating Task 1 column plot
+
+ggplot(data = Map_table,
+       mapping = aes(x = reorder(map, vote_win_proportion), y = vote_win_proportion)) +
+  geom_col(fill = "darkgreen") +
+  theme(
+    axis.text.x = element_text(angle = 60, vjust = 1, hjust = 1, size = 10)
+  ) +
+  labs(title = "Proportions of Map Vote Wins", x = "Map", y = "Proportion of Votes Won")
+
+```
+
+From the above plot of proportions of votes won for each map, we can see that `raid` and `nuketown '84` are the maps that are most likely to win the map vote when they are an option, each with a probability greater than 80%.
+
+## Task 2 (Data Cleaning and Data Visualization – Complete using Generative AI)
+
+
+## Task 3 (Inference)
+
+
+## Task 4 (Prediction)
+
+
+## Code Appendix
+``` {r codeAppend, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
+
+```
+
+
+
