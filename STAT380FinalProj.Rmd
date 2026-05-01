@@ -395,6 +395,13 @@ kable(Method_table)
 
 From this table we can see that none of the methods were exceptional at predicting whether the player's team wins based on player performance. We can conclude that SVM was the best prediction method in this case as it has both the highest accuracy and area under the curve.
 
+## Contributions
+
+Task 1: Isaac Swope  
+Task 2: Andrew Loiselle  
+Task 3: Andrew Loiselle  
+Task 4: Isaac Swope
+
 
 ## Code Appendix
 ``` {r codeAppend, ref.label=knitr::all_labels(), echo=TRUE, eval=FALSE}
