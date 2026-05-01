@@ -184,6 +184,28 @@ ggplot(map_summary, aes(x = reorder(Map, win_rate), y = win_rate)) +
 
 ## Task 3 (Inference)
 
+```{r}
+Games_clean_3 <- Games %>%
+  mutate(
+    GameType = str_squish(GameType),
+    GameType_clean = str_remove(GameType, "^HC\\s*-\\s*")
+  ) %>%
+  filter(!is.na(TotalXP), !is.na(Score), !is.na(GameType_clean))
+
+summary_stats <- Games_clean_3 %>%
+  group_by(GameType_clean) %>%
+  summarise(
+    n = n(),
+    mean_TotalXP = mean(TotalXP, na.rm = TRUE),
+    sd_TotalXP = sd(TotalXP, na.rm = TRUE),
+    mean_Score = mean(Score, na.rm = TRUE),
+    sd_Score = sd(Score, na.rm = TRUE)
+  )
+
+print(summary_stats)
+```
+
+
 
 ## Task 4 (Prediction)
 
