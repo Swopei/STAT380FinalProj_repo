@@ -24,6 +24,11 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(stringr)
+library(pROC)
+library(patchwork)
+library(corrplot)
+library(randomForest)
+library(e1071)
 
 ```
 
@@ -170,6 +175,7 @@ ggplot(map_summary, aes(x = reorder(Map, win_rate), y = win_rate)) +
     y = "Win Rate"
   ) +
   scale_y_continuous(labels = scales::percent_format())
+
 ```
 
 
@@ -186,6 +192,138 @@ ggplot(map_summary, aes(x = reorder(Map, win_rate), y = win_rate)) +
 
 
 ## Task 4 (Prediction)
+
+Research Question: How do different classification methods compare for predicting the result of matches.
+
+The `Result` variable contains the score for each match as a character string, with the left number being the player's team score and the right number being the opposing team's score. Some data wrangling is necessary to prepare the data for classification. The `Result` variable must be split into `Player_Team_Score` and `Opposing_Team_Score` to compare the scores. A binary variable, `Player_Team_Win`, is created and takes a value of 1 when the player's team's score is greater than the opposing team's score.  
+
+```{r}
+# Data Wrangling for Task 4
+
+GamesResults <- Games %>%
+  separate(Result,
+           into = c("Player_Team_Score", "Opposing_Team_Score"),
+           sep = "-",
+  ) %>%
+  mutate(Player_Team_Win = as.factor(ifelse(Player_Team_Score > Opposing_Team_Score, 1, 0)))
+
+```
+  
+In order to fairly compare methods, the same predictor variables must be used for each. The variables `Eliminations`, `Deaths`, `Score`, and `Damage` will be used. These variables were chosen because they relate to the player's performance during a mathc. Below we can see that `Damage` has a correlation with `Eliminations` which is to be expected as damage is necessary to eliminate an opponent. There is a correlation between `Eliminations` and `Score` as well, but `Score` will be kept as a predictor variable as it appears that more goes into calculating the score than simply the number of eliminations.
+
+```{r}
+x_vars <- c("Eliminations", "Deaths", "Score", "Damage")
+GamesResults <- GamesResults %>%
+  drop_na(all_of(x_vars))
+CorMat <- cor(GamesResults[ , x_vars], method = "pearson")
+corrplot(CorMat, method = "number")
+```
+
+Model prediction power will be compared by splitting the data into an 80/20 testing-training split and seeing how well the model generalizes to new data. AUC and Accuracy will be the values used to compare models.  
+
+```{r}
+# Testing-Training split for Task 4
+
+set.seed(146)
+train_ind <- sample(1:nrow(GamesResults), floor(0.8*nrow(GamesResults)))
+set.seed(NULL)
+Train <- GamesResults[train_ind,]
+Test <- GamesResults[-train_ind,]
+
+
+
+```
+
+The three classification methods that will be compared are logistic regression, random forest, and support vector machine. Each model will be created using the training data set. For the logistic regression model we create a generalized linear model with a binomial distribution. For the random forest model we used 500 decision trees as it is enough to decrease the variance, but also not too many to overly increase computation time without gains in accuracy. We selected 2 for the `mtry` parameter or the number of predictor variables considered at each split within the tree as it is the default to choose the square root of the number of predictors which in our case was 4. Our third classification method was Support vector machine (SVM). SVM is a machine learning technique with the goal of finding the best possible boundary that separates the classes. Since we chose multiple predictors the boundary between predicting win or loss is a multidimensional plane.
+
+```{r}
+# Creating models for Task 4
+
+Glmodel <- glm(Player_Team_Win ~ Eliminations + Deaths + Score + Damage, family = "binomial", data = Train)
+
+set.seed(146)
+Rfmodel <- randomForest(Player_Team_Win ~ Eliminations + Deaths + Score + Damage, data = Train, ntree = 500, mtry = 2)
+set.seed(NULL)
+
+Svmmodel <- svm(Player_Team_Win ~ Eliminations + Deaths + Score + Damage, data = Train, probability = TRUE, scale = TRUE)
+
+```
+  
+The predictions for each model are calculated by inputing the test data predictor variables into the models.  
+
+```{r}
+# Model predictions and accuracy for Task 4
+
+glm_probs <- predict(Glmodel, newdata = Test, type = "response")
+rf_probs <- predict(Rfmodel, newdata = Test, type = "prob")
+rf_probs <- rf_probs[ , 2]
+test_predictors <- Test[, c("Eliminations", "Deaths", "Score", "Damage")]
+svm_probs_raw <- predict(Svmmodel, newdata = test_predictors, probability = TRUE)
+svm_probs <- attr(svm_probs_raw, "probabilities")[, "1"]
+
+glm_preds <- ifelse(glm_probs > 0.5, 1, 0)
+rf_preds <- ifelse(rf_probs > 0.5, 1, 0)
+svm_preds <- ifelse(svm_probs > 0.5, 1, 0)
+
+glm_accuracy <- mean(glm_preds == Test$Player_Team_Win)
+rf_accuracy <- mean(rf_preds == Test$Player_Team_Win)
+svm_accuracy <- mean(svm_preds == Test$Player_Team_Win)
+
+```
+  
+Below we can see the ROC curves for each method. From these plots we can see that the curves are somewhat similar and there does not appear to be a clear superior or inferior prediction method.
+
+```{r, message = FALSE, fig.width = 8}
+# Creating the ROC curves and getting the AUC values for Task 4
+
+glm_roc <- roc(response = Test$Player_Team_Win,
+                predictor = glm_probs,
+                print.auc = TRUE,
+                legacy.axes = TRUE)
+glm_auc <- as.numeric(glm_roc$auc)
+glm_roc_plot <- ggroc(glm_roc, legacy.axes = TRUE) + 
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  labs(title = "GLM ROC Curve") +
+  theme_minimal()
+
+rf_roc <- roc(response = Test$Player_Team_Win,
+                predictor = rf_probs,
+                print.auc = TRUE,
+                legacy.axes = TRUE)
+rf_auc <- as.numeric(rf_roc$auc)
+rf_roc_plot <- ggroc(rf_roc, legacy.axes = TRUE) + 
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  labs(title = "Random Forest ROC Curve") +
+  theme_minimal()
+
+svm_roc <- roc(response = Test$Player_Team_Win,
+                predictor = svm_probs,
+                print.auc = TRUE,
+                legacy.axes = TRUE)
+svm_auc <- as.numeric(svm_roc$auc)
+svm_roc_plot <- ggroc(svm_roc, legacy.axes = TRUE) + 
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  labs(title = "SVM ROC Curve") +
+  theme_minimal()
+
+glm_roc_plot + rf_roc_plot + svm_roc_plot
+
+```
+
+```{r}
+# Creating method comparison table for Task 4
+
+Method_table <- data.frame(
+  Method = c("GLM", "Random Forst", "SVM"),
+  Accuracy = c(glm_accuracy, rf_accuracy, svm_accuracy),
+  AUC = c(glm_auc, rf_auc, svm_auc)
+)
+
+kable(Method_table)
+
+```
+
+From this table we can see that none of the methods were exceptional at predicting whether the player's team wins based on player performance. We can conclude that SVM was the best prediction method in this case as it has both the highest accuracy and area under the curve.
 
 
 ## Code Appendix
