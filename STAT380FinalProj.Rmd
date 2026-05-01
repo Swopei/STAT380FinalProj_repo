@@ -190,6 +190,74 @@ ggplot(map_summary, aes(x = reorder(Map, win_rate), y = win_rate)) +
 
 ## Task 3 (Inference)
 
+```{r}
+Games_clean_3 <- Games %>%
+  mutate(
+    GameType = str_squish(GameType),
+    GameType_clean = str_remove(GameType, "^HC\\s*-\\s*")
+  ) %>%
+  filter(!is.na(TotalXP), !is.na(Score), !is.na(GameType_clean))
+
+summary_stats <- Games_clean_3 %>%
+  group_by(GameType_clean) %>%
+  summarise(
+    n = n(),
+    mean_TotalXP = mean(TotalXP, na.rm = TRUE),
+    sd_TotalXP = sd(TotalXP, na.rm = TRUE),
+    mean_Score = mean(Score, na.rm = TRUE),
+    sd_Score = sd(Score, na.rm = TRUE)
+  )
+
+print(summary_stats)
+```
+
+```{r}
+ggplot(Games_clean_3, aes(x = GameType_clean, y = TotalXP)) +
+  geom_boxplot(fill = "steelblue", alpha = 0.7) +
+  coord_flip() +
+  labs(
+    title = "Distribution of TotalXP by Game Type",
+    x = "Game Type",
+    y = "TotalXP"
+  )
+```
+
+```{r}
+ggplot(Games_clean_3, aes(x = Score, y = TotalXP, color = GameType_clean)) +
+  geom_point(alpha = 0.4) +
+  labs(
+    title = "TotalXP vs Score by Game Type",
+    x = "Score",
+    y = "TotalXP",
+    color = "Game Type"
+  )
+```
+
+```{r}
+ggplot(Games_clean_3, aes(x = Score, y = TotalXP)) +
+  geom_point(alpha = 0.4, color = "darkgreen") +
+  facet_wrap(~ GameType_clean) +
+  labs(
+    title = "TotalXP vs Score by Game Type",
+    x = "Score",
+    y = "TotalXP"
+  )
+```
+
+```{r}
+Games_clean_3$GameType_clean <- factor(Games_clean_3$GameType_clean)
+
+model_main <- lm(TotalXP ~ Score + GameType_clean, data = Games_clean_3)
+summary(model_main)
+
+model_interaction <- lm(TotalXP ~ Score * GameType_clean, data = Games_clean_3)
+summary(model_interaction)
+
+anova(model_main, model_interaction)
+```
+
+The modeling results show that Score is the primary determinant of TotalXP, while game type has only a minimal effect once Score is accounted for. In the main-effects model, Score has a strong and highly significant positive association with TotalXP, indicating that players reliably earn more XP as their Score increases. In contrast, the game‑type coefficients, Hardpoint, Kill Confirmed, and TDM—are all small and statistically weak with p‑values of 0.94, 0.063, and 0.096, respectively, suggesting that players with the same Score receive roughly similar TotalXP regardless of the mode they are playing. The interaction model, which allows each game type to have its own Score‑to‑XP slope, fits statistically better (ANOVA p = 3.29e‑05), but the improvement is modest, raising R² only from 0.338 to 0.357, and none of the interaction terms reach conventional significance. The strongest, Score × TDM, has p = 0.079. Overall, the analysis supports a clear conclusion: after controlling for Score, game type has little practical impact on TotalXP, and players’ performance, as measured by Score, is what truly determines how much XP they earn.
+
 
 ## Task 4 (Prediction)
 
