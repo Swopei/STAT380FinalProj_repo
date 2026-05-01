@@ -190,6 +190,8 @@ ggplot(map_summary, aes(x = reorder(Map, win_rate), y = win_rate)) +
 
 ## Task 3 (Inference)
 
+Research Question: How does the game type affect TotalXP after accounting for the Score?
+
 ```{r}
 Games_clean_3 <- Games %>%
   mutate(
@@ -213,7 +215,7 @@ print(summary_stats)
 
 ```{r}
 ggplot(Games_clean_3, aes(x = GameType_clean, y = TotalXP)) +
-  geom_boxplot(fill = "steelblue", alpha = 0.7) +
+  geom_boxplot(fill = "darkgreen", alpha = 0.7) +
   coord_flip() +
   labs(
     title = "Distribution of TotalXP by Game Type",
